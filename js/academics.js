@@ -459,3 +459,39 @@ $("#view").addEventListener("click", async (event) => {
     toast("Action failed. Please try again.", "error");
   }
 });
+/* ---------- Subjects by course, year level and semester ---------- */
+
+const YEAR_LEVELS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"];
+const TERMS = ["1st Semester", "2nd Semester", "Summer"];
+
+// The label also sorts the list: course, then year, then semester, then code
+LABEL.subjects = (r) => {
+  const course = find("courses", r.courseId);
+  return `${course ? course.code : "?"} | ${r.yearLevel || "-"} | ${r.term || "-"} | ${r.code} - ${r.name}`;
+};
+
+MODELS.subjects = {
+  title: "Subjects",
+  fields: [
+    field("courseId", "Course", "select", { source: "courses" }),
+    field("yearLevel", "Year level", "select", { options: YEAR_LEVELS }),
+    field("term", "Semester", "select", { options: TERMS }),
+    field("code", "Code"),
+    field("name", "Name"),
+    field("units", "Units", "number")
+  ],
+  columns: [
+    ["Course", (r) => find("courses", r.courseId)?.code || "?"],
+    ["Year", (r) => r.yearLevel || "-"],
+    ["Semester", (r) => r.term || "-"],
+    ["Code", (r) => r.code],
+    ["Name", (r) => r.name],
+    ["Units", (r) => r.units]
+  ],
+  // The same code is allowed in different courses, but not twice in one course
+  check: (rec, id) =>
+    data.subjects.some((s) => s.id !== id && s.courseId === rec.courseId &&
+      s.code.toLowerCase() === rec.code.toLowerCase())
+      ? "That subject code already exists in this course." : "",
+  refs: [["classes", "subjectId"]]
+};
