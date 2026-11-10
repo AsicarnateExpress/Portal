@@ -649,3 +649,212 @@ $("#view").addEventListener("click", (event) => {
   }
   if (button.dataset.act === "att-save") saveAttendance(button);
 });
+/* ---------- Announcements and materials (Module 4D) ---------- */
+
+const FS4 = await import(
+  "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"
+);
+
+TITLES.materials = "Learning materials";
+
+// Add the "Learning materials" button to the menu
+{
+  const menuButton = document.createElement("button");
+  menuButton.type = "button";
+  menuButton.dataset.view = "materials";
+  menuButton.textContent = "Learning materials";
+  $("#nav").insertBefore(menuButton, $('#nav [data-view="announcements"]'));
+}
+
+const when = (stamp) => (stamp?.toDate ? stamp.toDate().toLocaleString() : "-");
+const byNewest = (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+const FIELD = "width:100%;padding:10px;border:1.5px solid var(--line);border-radius:10px;font:inherit";
+
+
+/* ----- Announcements ----- */
+
+render.announcements = () => {
+  setTimeout(loadFacultyAnnouncements, 0);
+  return '<div id="annBox"><p class="muted">Loading...</p></div>';
+};
+
+async function loadFacultyAnnouncements() {
+  const box = $("#annBox");
+  if (!box) return;
+
+  try {
+    const [adminSnap, mineSnap] = await Promise.all([
+      getDocs(query(collection(db, "announcements"), where("audience", "in", ["all", "faculty"]))),
+      getDocs(query(collection(db, "announcements"), where("authorUid", "==", me.uid)))
+    ]);
+    const fromAdmin = adminSnap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(byNewest);
+    const mine = mineSnap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(byNewest);
+
+    const card = (a, own) => `
+      <div class="panel" style="margin-bottom:12px">
+        <h3 style="margin-bottom:4px">${esc(a.title)}</h3>
+        <p class="muted" style="margin:0 0 8px">${own ? "To: students" : esc(a.authorName)} | ${esc(when(a.createdAt))}</p>
+        <p style="white-space:pre-wrap;margin:0 0 10px">${esc(a.body)}</p>
+        ${own ? `<button type="button" class="btn sm danger" data-act="f-ann-del" data-id="${esc(a.id)}">Delete</button>` : ""}
+      </div>`;
+
+    box.innerHTML = `
+      <div class="panel" style="margin-bottom:12px">
+        <h3>Post to students</h3>
+        <div style="display:grid;gap:10px;max-width:560px">
+          <input id="fAnnTitle" maxlength="120" placeholder="Title" style="${FIELD}">
+          <textarea id="fAnnBody" rows="4" maxlength="2000" placeholder="Message" style="${FIELD}"></textarea>
+          <p id="fAnnError" style="color:var(--danger);min-height:1.2em;margin:0"></p>
+          <div><button type="button" class="btn" data-act="f-ann-post">Post</button></div>
+        </div>
+      </div>
+      <h3>From the administrators</h3>
+      ${fromAdmin.map((a) => card(a, false)).join("") || '<div class="panel"><p class="muted">Nothing yet.</p></div>'}
+      <h3>My posts</h3>
+      ${mine.map((a) => card(a, true)).join("") || '<div class="panel"><p class="muted">You have not posted anything yet.</p></div>'}`;
+  } catch (error) {
+    box.innerHTML = '<p class="muted">Could not load announcements. Try again.</p>';
+  }
+}
+
+async function postFacultyAnnouncement(button) {
+  const title = $("#fAnnTitle").value.trim();
+  const body = $("#fAnnBody").value.trim();
+  const fail = (message) => { $("#fAnnError").textContent = message; };
+  fail("");
+  if (!title) return fail("Enter a title.");
+  if (!body) return fail("Enter a message.");
+
+  button.disabled = true;
+  try {
+    await FS4.setDoc(doc(collection(db, "announcements")), {
+      title,
+      body,
+      audience: "students",
+      authorUid: me.uid,
+      authorName: me.name,
+      authorRole: "faculty",
+      createdAt: FS4.serverTimestamp()
+    });
+    toast("Announcement posted");
+    await loadFacultyAnnouncements();
+  } catch (error) {
+    fail("Could not post. Try again.");
+    button.disabled = false;
+  }
+}
+
+
+/* ----- Learning materials ----- */
+
+render.materials = () => {
+  if (!myClasses.length) return empty("No classes are assigned to you yet.");
+  const options = myClasses.map((c) =>
+    `<option value="${esc(c.id)}">${esc(c.code)} - ${esc(c.name)} (${esc(c.section)}, ${esc(c.term)})</option>`
+  ).join("");
+  return `
+    <div class="panel">
+      <div class="toolbar">
+        <select id="matClass"><option value="">Choose a class...</option>${options}</select>
+      </div>
+      <p class="muted">Add links to files stored on Google Drive, YouTube, or any website. Students enrolled in this subject can open them.</p>
+      <div id="matBox"></div>
+    </div>`;
+};
+
+async function loadMaterials() {
+  const box = $("#matBox");
+  const classId = $("#matClass").value;
+  if (!classId) { box.innerHTML = ""; return; }
+  box.innerHTML = '<p class="muted">Loading...</p>';
+
+  try {
+    const snap = await getDocs(query(
+      collection(db, "materials"),
+      where("classId", "==", classId),
+      where("facultyId", "==", me.uid)
+    ));
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(byNewest);
+
+    const rows = items.map((m) => `<tr>
+      <td><a href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${esc(m.title)}</a></td>
+      <td>${esc(m.description)}</td>
+      <td>${esc(when(m.createdAt))}</td>
+      <td><button type="button" class="btn sm danger" data-act="mat-del" data-id="${esc(m.id)}">Delete</button></td>
+    </tr>`).join("");
+
+    box.innerHTML = `
+      <div style="display:grid;gap:10px;max-width:560px;margin-bottom:16px">
+        <input id="matTitle" maxlength="120" placeholder="Title (example: Week 1 slides)" style="${FIELD}">
+        <input id="matUrl" maxlength="500" placeholder="Link (starts with https://)" style="${FIELD}">
+        <input id="matDesc" maxlength="500" placeholder="Short description (optional)" style="${FIELD}">
+        <p id="matError" style="color:var(--danger);min-height:1.2em;margin:0"></p>
+        <div><button type="button" class="btn" data-act="mat-add">Add material</button></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Title</th><th>Description</th><th>Added</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="muted">No materials yet.</td></tr>'}</tbody>
+      </table></div>`;
+  } catch (error) {
+    box.innerHTML = '<p class="muted">Could not load the materials. Try again.</p>';
+  }
+}
+
+async function addMaterial(button) {
+  const title = $("#matTitle").value.trim();
+  const url = $("#matUrl").value.trim();
+  const description = $("#matDesc").value.trim();
+  const fail = (message) => { $("#matError").textContent = message; };
+  fail("");
+  if (!title) return fail("Enter a title.");
+  if (!/^https?:\/\/\S+$/i.test(url)) return fail("Enter a full link that starts with https://");
+
+  button.disabled = true;
+  try {
+    await FS4.setDoc(doc(collection(db, "materials")), {
+      classId: $("#matClass").value,
+      title,
+      url,
+      description,
+      facultyId: me.uid,
+      createdAt: FS4.serverTimestamp()
+    });
+    toast("Material added");
+    await loadMaterials();
+  } catch (error) {
+    fail("Could not add it. Try again.");
+    button.disabled = false;
+  }
+}
+
+
+/* ----- Events ----- */
+
+$("#view").addEventListener("change", (event) => {
+  if (event.target.id === "matClass") loadMaterials();
+});
+
+$("#view").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-act]");
+  if (!button) return;
+  const act = button.dataset.act;
+
+  try {
+    if (act === "f-ann-post") await postFacultyAnnouncement(button);
+    if (act === "mat-add") await addMaterial(button);
+    if (act === "f-ann-del") {
+      if (!window.confirm("Delete this announcement?")) return;
+      await FS4.deleteDoc(doc(db, "announcements", button.dataset.id));
+      toast("Announcement deleted");
+      await loadFacultyAnnouncements();
+    }
+    if (act === "mat-del") {
+      if (!window.confirm("Delete this material?")) return;
+      await FS4.deleteDoc(doc(db, "materials", button.dataset.id));
+      toast("Material deleted");
+      await loadMaterials();
+    }
+  } catch (error) {
+    toast("Action failed. Please try again.", "error");
+  }
+});
