@@ -383,3 +383,90 @@ async function loadGrades() {
     box.innerHTML = '<p class="muted">Could not load your grades. Try again.</p>';
   }
 }
+/* ---------- Attendance (Module 4C) ---------- */
+
+render.attendance = () => {
+  setTimeout(loadAttendance, 0);
+  return '<div id="attBox" class="panel"><p class="muted">Loading attendance...</p></div>';
+};
+
+const STATUS_PILL = {
+  present: "active", late: "pending", excused: "pending", absent: "deactivated"
+};
+const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+async function loadAttendance() {
+  const box = $("#attBox");
+  if (!box) return;
+
+  const asMap = (snap) =>
+    Object.fromEntries(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]));
+
+  try {
+    const [attSnap, classSnap, subjectSnap] = await Promise.all([
+      getDocs(query(collection(db, "attendance"), where("studentId", "==", me.uid))),
+      getDocs(collection(db, "classes")),
+      getDocs(collection(db, "subjects"))
+    ]);
+    const classes = asMap(classSnap);
+    const subjects = asMap(subjectSnap);
+
+    const records = attSnap.docs.map((d) => {
+      const a = d.data();
+      const subject = subjects[(classes[a.classId] || {}).subjectId] || {};
+      return {
+        key: a.classId,
+        date: a.date,
+        status: a.status,
+        subject: `${subject.code || "?"} - ${subject.name || "(deleted subject)"}`
+      };
+    });
+
+    if (!records.length) {
+      box.innerHTML = '<p class="muted">No attendance records yet. They appear here once your faculty marks attendance.</p>';
+      return;
+    }
+
+    // Totals for each subject
+    const summary = {};
+    records.forEach((r) => {
+      const row = summary[r.key] || (summary[r.key] =
+        { subject: r.subject, present: 0, late: 0, absent: 0, excused: 0 });
+      row[r.status] = (row[r.status] || 0) + 1;
+    });
+
+    const summaryRows = Object.values(summary).map((s) => {
+      const counted = s.present + s.late + s.absent;
+      const rate = counted ? Math.round(((s.present + s.late) / counted) * 100) + "%" : "-";
+      return `<tr>
+        <td>${esc(s.subject)}</td>
+        <td>${s.present}</td><td>${s.late}</td><td>${s.absent}</td><td>${s.excused}</td>
+        <td><b>${rate}</b></td>
+      </tr>`;
+    }).join("");
+
+    const recentRows = records
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 30)
+      .map((r) => `<tr>
+        <td>${esc(r.date)}</td>
+        <td>${esc(r.subject)}</td>
+        <td><span class="pill ${STATUS_PILL[r.status] || ""}">${esc(capitalize(r.status))}</span></td>
+      </tr>`).join("");
+
+    box.innerHTML = `
+      <h3>Summary</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Subject</th><th>Present</th><th>Late</th><th>Absent</th><th>Excused</th><th>Rate</th></tr></thead>
+        <tbody>${summaryRows}</tbody>
+      </table></div>
+      <p class="muted">Rate counts present and late days; excused days are left out.</p>
+      <h3>Recent records</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Subject</th><th>Status</th></tr></thead>
+        <tbody>${recentRows}</tbody>
+      </table></div>`;
+  } catch (error) {
+    box.innerHTML = '<p class="muted">Could not load your attendance. Try again.</p>';
+  }
+}
