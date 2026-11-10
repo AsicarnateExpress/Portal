@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Student Dashboard - University of St. Gabriel</title>
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+  <style>
+    .profile-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+    }
+    .profile-grid small { display: block; color: var(--muted); }
+    .profile-grid b { color: var(--forest); word-break: break-word; }
+    .avatar {
+      width: 84px;
+      height: 84px;
+      margin-bottom: 14px;
+      border: 3px solid var(--gold);
+      border-radius: 50%;
+      object-fit: cover;
+      background: var(--gray);
+    }
+    .pw-form { display: grid; gap: 12px; max-width: 360px; }
+    .pw-form label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--forest);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .pw-form input {
+      width: 100%;
+      padding: 10px;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      font: inherit;
+    }
+  </style>
+</head>
+<body class="dash-body">
+
+  <div id="loading" class="loading">
+    <span class="spinner big"></span> Checking access...
+  </div>
+
+  <div class="app" id="app" hidden>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="side-brand">
+        <span class="crest sm">SG</span>
+        <b>St. Gabriel</b>
+      </div>
+      <nav id="nav">
+        <button type="button" data-view="profile" class="on">My profile</button>
+        <button type="button" data-view="classes">My classes</button>
+        <button type="button" data-view="grades">Grades</button>
+        <button type="button" data-view="attendance">Attendance</button>
+        <button type="button" data-view="announcements">Announcements</button>
+        <button type="button" data-view="account">Account</button>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button type="button" id="menuBtn" class="icon-btn"
+                aria-label="Open menu">&#9776;</button>
+        <h2 id="viewTitle">My profile</h2>
+        <div class="profile">
+          <button type="button" id="profileBtn">Student</button>
+          <div id="profileMenu" hidden>
+            <p id="profileInfo"></p>
+            <button type="button" id="logoutBtn" class="btn sm block">
+              Log out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main id="view"></main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script type="module" src="js/student.js"></script>
+</body>
+</html>
