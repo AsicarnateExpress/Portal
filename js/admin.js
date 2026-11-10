@@ -424,3 +424,108 @@ $("#view").addEventListener("click", async (event) => {
     toast("Action failed. Please try again.", "error");
   }
 });
+/* ---------- Announcements (Module 4D) ---------- */
+
+TITLES.announcements = "Announcements";
+
+const AUDIENCES = { all: "Everyone", students: "Students", faculty: "Faculty" };
+
+async function renderAnnouncements() {
+  const snap = await getDocs(collection(db, "announcements"));
+  const list = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+  const cards = list.map((a) => `
+    <div class="panel" style="margin-bottom:12px">
+      <h3 style="margin-bottom:4px">${esc(a.title)}</h3>
+      <p class="muted" style="margin:0 0 8px">
+        To: ${esc(AUDIENCES[a.audience] || a.audience)} |
+        ${esc(a.authorName)} (${esc(a.authorRole)}) | ${esc(fmt(a.createdAt))}
+      </p>
+      <p style="white-space:pre-wrap;margin:0 0 10px">${esc(a.body)}</p>
+      <button type="button" class="btn sm danger" data-act="ann-delete" data-id="${esc(a.id)}">Delete</button>
+    </div>`).join("");
+
+  const field = "width:100%;padding:10px;border:1.5px solid var(--line);border-radius:10px;font:inherit";
+  $("#view").innerHTML = `
+    <div class="panel">
+      <h3>Post an announcement</h3>
+      <div style="display:grid;gap:10px;max-width:560px">
+        <input id="annTitle" maxlength="120" placeholder="Title" style="${field}">
+        <textarea id="annBody" rows="4" maxlength="2000" placeholder="Message" style="${field}"></textarea>
+        <select id="annAudience" style="${field}">
+          <option value="all">Everyone</option>
+          <option value="students">Students only</option>
+          <option value="faculty">Faculty only</option>
+        </select>
+        <p id="annError" style="color:var(--danger);min-height:1.2em;margin:0"></p>
+        <div><button type="button" class="btn" data-act="ann-post">Post</button></div>
+      </div>
+    </div>
+    ${cards || '<div class="panel"><p class="muted">No announcements yet.</p></div>'}`;
+}
+
+// Teach the page about the new Announcements view
+const baseShow = show;
+show = async function (name) {
+  if (name !== "announcements") return baseShow(name);
+  view = name;
+  document.querySelectorAll("#nav button").forEach((b) =>
+    b.classList.toggle("on", b.dataset.view === name)
+  );
+  $("#viewTitle").textContent = TITLES[name];
+  $("#sidebar").classList.remove("open");
+  $("#view").innerHTML = '<p class="muted">Loading...</p>';
+  try {
+    await renderAnnouncements();
+  } catch (error) {
+    $("#view").innerHTML = '<p class="muted">Could not load announcements. Try again.</p>';
+  }
+};
+
+async function postAnnouncement(button) {
+  const title = $("#annTitle").value.trim();
+  const body = $("#annBody").value.trim();
+  const audience = $("#annAudience").value;
+  const fail = (message) => { $("#annError").textContent = message; };
+  fail("");
+  if (!title) return fail("Enter a title.");
+  if (!body) return fail("Enter a message.");
+
+  button.disabled = true;
+  try {
+    await setDoc(doc(collection(db, "announcements")), {
+      title,
+      body,
+      audience,
+      authorUid: me.uid,
+      authorName: me.name,
+      authorRole: "admin",
+      createdAt: serverTimestamp()
+    });
+    await logAction("posted announcement", title);
+    toast("Announcement posted");
+    await renderAnnouncements();
+  } catch (error) {
+    fail("Could not post. Try again.");
+    button.disabled = false;
+  }
+}
+
+$("#view").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-act]");
+  if (!button) return;
+  try {
+    if (button.dataset.act === "ann-post") await postAnnouncement(button);
+    if (button.dataset.act === "ann-delete") {
+      if (!(await confirmBox("Delete this announcement?"))) return;
+      await deleteDoc(doc(db, "announcements", button.dataset.id));
+      await logAction("deleted announcement", "");
+      toast("Announcement deleted");
+      await renderAnnouncements();
+    }
+  } catch (error) {
+    toast("Action failed. Please try again.", "error");
+  }
+});
