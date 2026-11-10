@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Academics - University of St. Gabriel</title>
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+  <style>
+    .sidebar nav a {
+      display: block;
+      margin-bottom: 6px;
+      padding: 11px 12px;
+      border-left: 4px solid transparent;
+      border-radius: 10px;
+      color: var(--white);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .sidebar nav hr {
+      margin: 8px 0;
+      border: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .section-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .section-head h3 { margin: 0; }
+    #formFields { display: grid; gap: 12px; }
+    #formFields label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--forest);
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    #formFields input,
+    #formFields select {
+      width: 100%;
+      padding: 10px;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      background: var(--white);
+      font: inherit;
+    }
+    .form-error {
+      min-height: 1.2em;
+      margin: 8px 0 0;
+      color: var(--danger);
+      font-size: 0.88rem;
+    }
+  </style>
+</head>
+<body class="dash-body">
+
+  <div id="loading" class="loading">
+    <span class="spinner big"></span> Checking access...
+  </div>
+
+  <div class="app" id="app" hidden>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="side-brand">
+        <span class="crest sm">SG</span>
+        <b>St. Gabriel</b>
+      </div>
+      <nav id="nav">
+        <a href="admin.html">&larr; Dashboard</a>
+        <hr>
+        <button type="button" data-view="departments" class="on">Departments</button>
+        <button type="button" data-view="courses">Courses</button>
+        <button type="button" data-view="subjects">Subjects</button>
