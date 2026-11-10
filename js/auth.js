@@ -481,3 +481,101 @@ $("#authForm").addEventListener("submit", async (event) => {
 /* ---------- 9. Start ---------- */
 
 render();
+/* ---------- Registration rules update ---------- */
+
+const STRONG_PASSWORD = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+const ID_FORMAT = { faculty: /^FAC-\d{4}$/, admin: /^ADM-\d{4}$/ };
+const ID_EXAMPLE = { faculty: "FAC-0001", admin: "ADM-0001" };
+const ID_INPUT = { student: "studentId", faculty: "facultyId", admin: "adminId" };
+
+const RULES = [
+  ["At least 8 characters", (v) => v.length >= 8],
+  ["One uppercase letter", (v) => /[A-Z]/.test(v)],
+  ["One number", (v) => /\d/.test(v)],
+  ["One special character", (v) => /[^A-Za-z0-9]/.test(v)]
+];
+
+document.head.append(Object.assign(document.createElement("style"), {
+  textContent:
+    "#pwRules{grid-column:1/-1;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--gray)}" +
+    "#pwRules b{display:block;margin-bottom:6px;color:var(--forest)}" +
+    "#pwRules ul{margin:0;padding:0}" +
+    "#pwRules li{list-style:none;margin:3px 0;color:var(--muted);font-size:.9rem}" +
+    "#pwRules li::before{content:'\\25CB  '}" +
+    "#pwRules li.ok{color:var(--emerald);font-weight:600}" +
+    "#pwRules li.ok::before{content:'\\2713  '}"
+}));
+
+// Turns each requirement green when it is met
+function updateRules() {
+  const input = document.getElementById("password");
+  const list = document.getElementById("pwRules");
+  if (!input || !list) return;
+  list.querySelectorAll("li").forEach((li, i) =>
+    li.classList.toggle("ok", RULES[i][1](input.value))
+  );
+}
+
+// Redraw: add the checklist, the 11-digit contact box, and ID hints
+const baseRender = render;
+render = function () {
+  baseRender();
+  if (mode !== "register") return;
+
+  const password = document.querySelector('[data-field="password"]');
+  document.querySelector('[data-field="confirm"]')?.classList.add("full");
+  if (password) {
+    password.classList.add("full");
+    const box = document.createElement("div");
+    box.id = "pwRules";
+    box.innerHTML = "<b>Password requirements</b><ul>" +
+      RULES.map(([text]) => `<li>${text}</li>`).join("") + "</ul>";
+    password.after(box);
+  }
+
+  const contact = document.getElementById("contact");
+  if (contact) {
+    contact.setAttribute("inputmode", "numeric");
+    contact.maxLength = 11;
+    contact.placeholder = "09123456789";
+  }
+
+  const idBox = document.getElementById(ID_INPUT[role]);
+  if (idBox && ID_EXAMPLE[role]) idBox.placeholder = ID_EXAMPLE[role];
+};
+
+// Checks on submit
+const baseValidate = validate;
+validate = function (data, fields) {
+  const errors = baseValidate(data, fields);
+  if (mode !== "register") return errors;
+
+  const email = data.email || "";
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    errors.email = "Enter a valid email address. It must include @.";
+  }
+
+  const password = data.password || "";
+  if (password && !STRONG_PASSWORD.test(password)) {
+    errors.password = "Password must meet all the requirements.";
+  }
+
+  if (data.contact && !/^\d{11}$/.test(data.contact)) {
+    errors.contact = "Contact number must be exactly 11 digits.";
+  }
+
+  const idKey = ID_INPUT[role];
+  if (ID_FORMAT[role] && data[idKey] &&
+      !ID_FORMAT[role].test(data[idKey].toUpperCase())) {
+    errors[idKey] = `Use the format ${ID_EXAMPLE[role]}.`;
+  }
+  return errors;
+};
+
+// Live typing: digits only in the contact box, and the password checklist
+document.getElementById("authForm").addEventListener("input", (event) => {
+  if (event.target.id === "contact") {
+    event.target.value = event.target.value.replace(/\D/g, "").slice(0, 11);
+  }
+  if (event.target.id === "password") updateRules();
+});
