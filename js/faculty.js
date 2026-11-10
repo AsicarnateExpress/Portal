@@ -506,3 +506,146 @@ $("#view").addEventListener("click", (event) => {
   const button = event.target.closest('[data-act="save-grades"]');
   if (button) saveGrades(button);
 });
+/* ---------- Attendance (Module 4C) ---------- */
+
+const FS = await import(
+  "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"
+);
+
+const STATUSES = [
+  ["present", "Present"], ["absent", "Absent"],
+  ["late", "Late"], ["excused", "Excused"]
+];
+const todayText = () => new Date().toLocaleDateString("en-CA");
+
+// The Attendance page: pick a class and a date
+render.attendance = () => {
+  if (!myClasses.length) return empty("No classes are assigned to you yet.");
+  const options = myClasses.map((c) =>
+    `<option value="${esc(c.id)}">${esc(c.code)} - ${esc(c.name)} (${esc(c.section)}, ${esc(c.term)})</option>`
+  ).join("");
+  return `
+    <div class="panel">
+      <div class="toolbar">
+        <select id="attClass"><option value="">Choose a class...</option>${options}</select>
+        <input id="attDate" type="date" value="${todayText()}" max="${todayText()}">
+      </div>
+      <p class="muted">Mark each student for the chosen date. Students left blank are not recorded.</p>
+      <div id="attSheet"></div>
+    </div>`;
+};
+
+// Shows the students of the chosen class with any saved marks for that date
+async function loadAttendance() {
+  const box = $("#attSheet");
+  const classId = $("#attClass").value;
+  const date = $("#attDate").value;
+  const c = myClasses.find((x) => x.id === classId);
+  if (!c || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { box.innerHTML = ""; return; }
+  box.innerHTML = '<p class="muted">Loading...</p>';
+
+  try {
+    const [snap, students] = await Promise.all([
+      getDocs(query(
+        collection(db, "attendance"),
+        where("classId", "==", classId),
+        where("date", "==", date),
+        where("facultyId", "==", me.uid)
+      )),
+      Promise.all(c.studentIds.map(async (id) => {
+        const s = await getDoc(doc(db, "students", id));
+        return { id, ...(s.exists() ? s.data() : { firstName: "(removed account)" }) };
+      }))
+    ]);
+
+    const saved = {};
+    snap.docs.forEach((d) => { saved[d.data().studentId] = d.data().status; });
+    students.sort((a, b) => String(a.lastName || "").localeCompare(String(b.lastName || "")));
+
+    if (!students.length) {
+      box.innerHTML = '<p class="muted">No students are enrolled in this class yet.</p>';
+      return;
+    }
+
+    const rows = students.map((s) => {
+      const name = [s.lastName, s.firstName].filter(Boolean).join(", ");
+      const options = '<option value="">-</option>' + STATUSES.map(([value, label]) =>
+        `<option value="${value}" ${saved[s.id] === value ? "selected" : ""}>${label}</option>`
+      ).join("");
+      return `<tr data-student="${esc(s.id)}">
+        <td>${esc(s.studentId)}</td>
+        <td>${esc(name)}</td>
+        <td><select class="ains">${options}</select></td>
+      </tr>`;
+    }).join("");
+
+    box.dataset.classId = classId;
+    box.dataset.date = date;
+    box.innerHTML = `
+      <div class="table-wrap"><table>
+        <thead><tr><th>ID</th><th>Name</th><th>Status</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <p class="actions">
+        <button type="button" class="btn sm ghost" data-act="att-all">Mark all present</button>
+        <button type="button" class="btn" data-act="att-save">Save attendance</button>
+      </p>`;
+  } catch (error) {
+    box.innerHTML = '<p class="muted">Could not load the class. Try again.</p>';
+  }
+}
+
+// Saves every marked student for the chosen date
+async function saveAttendance(button) {
+  const box = $("#attSheet");
+  const { classId, date } = box.dataset;
+  const c = myClasses.find((x) => x.id === classId);
+  if (!c) return;
+  if (date > todayText()) return toast("You cannot mark a future date.", "error");
+
+  const batch = FS.writeBatch(db);
+  let count = 0;
+  for (const row of box.querySelectorAll("tr[data-student]")) {
+    const status = row.querySelector(".ains").value;
+    if (!status) continue;
+    batch.set(doc(db, "attendance", `${classId}_${date}_${row.dataset.student}`), {
+      classId,
+      studentId: row.dataset.student,
+      facultyId: me.uid,
+      date,
+      status,
+      updatedAt: FS.serverTimestamp()
+    });
+    count++;
+  }
+  if (!count) return toast("Mark at least one student first.", "error");
+
+  button.disabled = true;
+  try {
+    await batch.commit();
+    await FS.setDoc(doc(collection(db, "auditLogs")), {
+      actorUid: me.uid,
+      actorName: me.name,
+      action: "saved attendance",
+      target: `${c.code} ${c.section} ${date}`,
+      at: FS.serverTimestamp()
+    }).catch(() => {});
+    toast(`Attendance saved (${count})`);
+  } catch (error) {
+    toast("Could not save the attendance. Try again.", "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$("#view").addEventListener("change", (event) => {
+  if (event.target.id === "attClass" || event.target.id === "attDate") loadAttendance();
+});
+$("#view").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-act]");
+  if (!button) return;
+  if (button.dataset.act === "att-all") {
+    document.querySelectorAll("#attSheet .ains").forEach((s) => { s.value = "present"; });
+  }
+  if (button.dataset.act === "att-save") saveAttendance(button);
+});
