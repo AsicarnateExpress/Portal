@@ -75,3 +75,55 @@
         <button type="button" data-view="departments" class="on">Departments</button>
         <button type="button" data-view="courses">Courses</button>
         <button type="button" data-view="subjects">Subjects</button>
+        <button type="button" data-view="years">Academic years</button>
+        <button type="button" data-view="semesters">Semesters</button>
+        <button type="button" data-view="classes">Classes</button>
+        <button type="button" data-view="enrollment">Enrollment</button>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button type="button" id="menuBtn" class="icon-btn"
+                aria-label="Open menu">&#9776;</button>
+        <h2 id="viewTitle">Departments</h2>
+        <div class="profile">
+          <button type="button" id="profileBtn">Admin</button>
+          <div id="profileMenu" hidden>
+            <p id="profileInfo"></p>
+            <button type="button" id="logoutBtn" class="btn sm block">
+              Log out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main id="view"></main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <dialog id="confirmBox">
+    <p id="confirmText"></p>
+    <div class="dialog-actions">
+      <button type="button" id="confirmNo" class="btn ghost sm">Cancel</button>
+      <button type="button" id="confirmYes" class="btn sm">Confirm</button>
+    </div>
+  </dialog>
+
+  <dialog id="formBox">
+    <h3 id="formTitle"></h3>
+    <form id="recordForm" novalidate>
+      <div id="formFields"></div>
+      <p id="formError" class="form-error"></p>
+      <div class="dialog-actions">
+        <button type="button" id="formCancel" class="btn ghost sm">Cancel</button>
+        <button type="submit" class="btn sm">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/academics.js"></script>
+</body>
+</html>
