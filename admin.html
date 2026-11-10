@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Dashboard - University of St. Gabriel</title>
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body class="dash-body">
+
+  <div id="loading" class="loading">
+    <span class="spinner big"></span> Checking access...
+  </div>
+
+  <div class="app" id="app" hidden>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="side-brand">
+        <span class="crest sm">SG</span>
+        <b>St. Gabriel</b>
+      </div>
+      <nav id="nav">
+        <button type="button" data-view="overview" class="on">Overview</button>
+        <button type="button" data-view="approvals">
+          Approvals <span id="pendingBadge" class="badge" hidden></span>
+        </button>
+        <button type="button" data-view="accounts">Accounts</button>
+        <button type="button" data-view="invites">Admin invites</button>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button type="button" id="menuBtn" class="icon-btn"
+                aria-label="Open menu">&#9776;</button>
+        <h2 id="viewTitle">Overview</h2>
+        <div class="profile">
+          <button type="button" id="profileBtn">Admin</button>
+          <div id="profileMenu" hidden>
+            <p id="profileInfo"></p>
+            <button type="button" id="logoutBtn" class="btn sm block">
+              Log out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main id="view"></main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <dialog id="confirmBox">
+    <p id="confirmText"></p>
+    <div class="dialog-actions">
+      <button type="button" id="confirmNo" class="btn ghost sm">Cancel</button>
+      <button type="button" id="confirmYes" class="btn sm">Confirm</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
