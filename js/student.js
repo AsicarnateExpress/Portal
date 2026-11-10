@@ -292,3 +292,94 @@ $("#logoutBtn").addEventListener("click", logout);
 $("#view").addEventListener("submit", (event) => {
   if (event.target.id === "pwForm") changePassword(event);
 });
+/* ---------- Grades (Module 4B) ---------- */
+
+const PASSING = 75;
+
+// The Grades page: shows a loading box, then fills it in
+render.grades = () => {
+  setTimeout(loadGrades, 0);
+  return '<div id="gradeBox" class="panel"><p class="muted">Loading grades...</p></div>';
+};
+
+const shown = (value) =>
+  value === null || value === undefined ? "-" : String(value);
+
+async function loadGrades() {
+  const box = $("#gradeBox");
+  if (!box) return;
+
+  const asMap = (snap) =>
+    Object.fromEntries(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]));
+
+  try {
+    const [gradeSnap, classSnap, subjectSnap, semesterSnap, yearSnap] =
+      await Promise.all([
+        getDocs(query(collection(db, "grades"), where("studentId", "==", me.uid))),
+        getDocs(collection(db, "classes")),
+        getDocs(collection(db, "subjects")),
+        getDocs(collection(db, "semesters")),
+        getDocs(collection(db, "academicYears"))
+      ]);
+
+    const classes = asMap(classSnap);
+    const subjects = asMap(subjectSnap);
+    const semesters = asMap(semesterSnap);
+    const years = asMap(yearSnap);
+
+    const grades = gradeSnap.docs.map((d) => {
+      const g = d.data();
+      const c = classes[g.classId] || {};
+      const subject = subjects[c.subjectId] || {};
+      const semester = semesters[c.semesterId] || {};
+      const year = years[semester.academicYearId] || {};
+      const values = [g.prelim, g.midterm, g.final];
+      const numbers = values.filter((v) => typeof v === "number");
+
+      let average = "-";
+      let remarks = numbers.length ? "Incomplete" : "-";
+      if (numbers.length === 3) {
+        const mean = numbers.reduce((sum, v) => sum + v, 0) / 3;
+        average = mean.toFixed(2);
+        remarks = mean >= PASSING ? "Passed" : "Failed";
+      }
+
+      return {
+        subject: `${subject.code || "?"} - ${subject.name || "(deleted subject)"}`,
+        term: semester.name ? `${semester.name} ${year.name || ""}`.trim() : "-",
+        prelim: g.prelim,
+        midterm: g.midterm,
+        final: g.final,
+        average,
+        remarks,
+        hasAny: numbers.length > 0
+      };
+    }).filter((g) => g.hasAny)
+      .sort((a, b) => a.term.localeCompare(b.term) || a.subject.localeCompare(b.subject));
+
+    if (!grades.length) {
+      box.innerHTML = '<p class="muted">No grades yet. Your grades appear here once your faculty encodes them.</p>';
+      return;
+    }
+
+    const pill = { Passed: "active", Failed: "deactivated", Incomplete: "pending" };
+    const rows = grades.map((g) => `<tr>
+      <td>${esc(g.subject)}</td>
+      <td>${esc(g.term)}</td>
+      <td>${esc(shown(g.prelim))}</td>
+      <td>${esc(shown(g.midterm))}</td>
+      <td>${esc(shown(g.final))}</td>
+      <td><b>${esc(g.average)}</b></td>
+      <td><span class="pill ${pill[g.remarks] || ""}">${esc(g.remarks)}</span></td>
+    </tr>`).join("");
+
+    box.innerHTML = `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Subject</th><th>Semester</th><th>Prelim</th><th>Midterm</th><th>Final</th><th>Average</th><th>Remarks</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <p class="muted">Passing average: ${PASSING}</p>`;
+  } catch (error) {
+    box.innerHTML = '<p class="muted">Could not load your grades. Try again.</p>';
+  }
+}
