@@ -1,0 +1,62 @@
+/* dashboard.css - layout for the admin dashboard */
+
+.dash-body { background: var(--gray); }
+
+.loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--forest);
+  font-weight: 600;
+}
+.spinner.big { width: 26px; height: 26px; }
+
+/* Layout */
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+.app[hidden] { display: none; }
+.main { min-width: 0; }
+
+/* Sidebar */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 18px 12px;
+  background: var(--gradient);
+  color: var(--white);
+}
+.side-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 18px;
+  font-size: 1.05rem;
+}
+.crest.sm {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--gold);
+  border-radius: 50%;
+  color: var(--gold);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+.sidebar nav { display: flex; flex-direction: column; gap: 4px; }
+.sidebar nav button {
+  padding: 11px 12px;
+  border: 0;
+  border-left: 4px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  font-weight: 600;
+  text-a
