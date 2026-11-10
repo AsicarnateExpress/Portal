@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>University of St. Gabriel Student Portal</title>
+  <link rel="stylesheet" href="css/theme.css">
+</head>
+<body class="auth-body">
+  <main class="auth-shell">
+    <section class="brand">
+      <div class="crest" aria-hidden="true">SG</div>
+      <h1>University of St. Gabriel Student Portal</h1>
+      <p>Grades, schedules, enrollment, and announcements in one place for students, faculty, and administrators.</p>
+    </section>
+
+    <section class="auth-card">
+      <div class="tabs" id="roleTabs" role="tablist" aria-label="Account type">
+        <button type="button" data-role="student" class="on">Student</button>
+        <button type="button" data-role="faculty">Faculty</button>
+        <button type="button" data-role="admin">Administrator</button>
+      </div>
+      <div class="sub-tabs" id="modeTabs">
+        <button type="button" data-mode="login" class="on">Log in</button>
+        <button type="button" data-mode="register">Create account</button>
+      </div>
+      <div id="notice" class="notice" role="alert"></div>
+      <form id="authForm" novalidate></form>
+    </section>
+  </main>
+  <script type="module" src="js/auth.js"></script>
+</body>
+</html>
