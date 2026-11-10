@@ -470,3 +470,109 @@ async function loadAttendance() {
     box.innerHTML = '<p class="muted">Could not load your attendance. Try again.</p>';
   }
 }
+/* ---------- Announcements and materials (Module 4D) ---------- */
+
+TITLES.materials = "Learning materials";
+
+// Add the "Learning materials" button to the menu
+{
+  const menuButton = document.createElement("button");
+  menuButton.type = "button";
+  menuButton.dataset.view = "materials";
+  menuButton.textContent = "Learning materials";
+  $("#nav").insertBefore(menuButton, $('#nav [data-view="announcements"]'));
+}
+
+const whenText = (stamp) => (stamp?.toDate ? stamp.toDate().toLocaleString() : "-");
+const newestFirst = (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+
+
+/* ----- Announcements ----- */
+
+render.announcements = () => {
+  setTimeout(loadAnnouncements, 0);
+  return '<div id="annBox"><p class="muted">Loading announcements...</p></div>';
+};
+
+async function loadAnnouncements() {
+  const box = $("#annBox");
+  if (!box) return;
+
+  try {
+    const snap = await getDocs(query(
+      collection(db, "announcements"),
+      where("audience", "in", ["all", "students"])
+    ));
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(newestFirst);
+
+    if (!list.length) {
+      box.innerHTML = '<div class="panel"><p class="muted">No announcements yet.</p></div>';
+      return;
+    }
+
+    box.innerHTML = list.map((a) => `
+      <div class="panel" style="margin-bottom:12px">
+        <h3 style="margin-bottom:4px">${esc(a.title)}</h3>
+        <p class="muted" style="margin:0 0 8px">
+          ${esc(a.authorName)} (${esc(a.authorRole)}) | ${esc(whenText(a.createdAt))}
+        </p>
+        <p style="white-space:pre-wrap;margin:0">${esc(a.body)}</p>
+      </div>`).join("");
+  } catch (error) {
+    box.innerHTML = '<p class="muted">Could not load announcements. Try again.</p>';
+  }
+}
+
+
+/* ----- Learning materials ----- */
+
+render.materials = () => {
+  setTimeout(loadMaterials, 0);
+  return '<div id="matBox" class="panel"><p class="muted">Loading materials...</p></div>';
+};
+
+async function loadMaterials() {
+  const box = $("#matBox");
+  if (!box) return;
+
+  try {
+    const [enrollSnap, classSnap, subjectSnap, materialSnap] = await Promise.all([
+      getDocs(query(collection(db, "enrollments"), where("studentId", "==", me.uid))),
+      getDocs(collection(db, "classes")),
+      getDocs(collection(db, "subjects")),
+      getDocs(collection(db, "materials"))
+    ]);
+
+    const mine = new Set(enrollSnap.docs.map((d) => d.data().classId));
+    const classes = Object.fromEntries(classSnap.docs.map((d) => [d.id, d.data()]));
+    const subjects = Object.fromEntries(subjectSnap.docs.map((d) => [d.id, d.data()]));
+
+    const items = materialSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((m) => mine.has(m.classId))
+      .sort(newestFirst);
+
+    if (!items.length) {
+      box.innerHTML = '<p class="muted">No learning materials yet. Links your faculty adds for your classes appear here.</p>';
+      return;
+    }
+
+    const rows = items.map((m) => {
+      const subject = subjects[(classes[m.classId] || {}).subjectId] || {};
+      return `<tr>
+        <td>${esc(subject.code || "?")} - ${esc(subject.name || "(deleted subject)")}</td>
+        <td><a href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${esc(m.title)}</a></td>
+        <td>${esc(m.description)}</td>
+        <td>${esc(whenText(m.createdAt))}</td>
+      </tr>`;
+    }).join("");
+
+    box.innerHTML = `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Subject</th><th>Material</th><th>Description</th><th>Added</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+  } catch (error) {
+    box.innerHTML = '<p class="muted">Could not load the materials. Try again.</p>';
+  }
+}
