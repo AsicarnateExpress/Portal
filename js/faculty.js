@@ -337,3 +337,172 @@ $("#view").addEventListener("click", (event) => {
 $("#view").addEventListener("submit", (event) => {
   if (event.target.id === "pwForm") changePassword(event);
 });
+/* ---------- Grades (Module 4B) ---------- */
+
+const { writeBatch, setDoc, serverTimestamp } = await import(
+  "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"
+);
+
+const PASSING = 75;
+
+document.head.append(Object.assign(document.createElement("style"), {
+  textContent:
+    ".gin{width:84px;padding:7px;border:1.5px solid var(--line);border-radius:8px;font:inherit}" +
+    ".gin.bad{border-color:var(--danger)}"
+}));
+
+// The Grades page: a class picker and an empty sheet
+render.grades = () => {
+  if (!myClasses.length) return empty("No classes are assigned to you yet.");
+  const options = myClasses.map((c) =>
+    `<option value="${esc(c.id)}">${esc(c.code)} - ${esc(c.name)} (${esc(c.section)}, ${esc(c.term)})</option>`
+  ).join("");
+  return `
+    <div class="panel">
+      <div class="toolbar">
+        <select id="gradeClass"><option value="">Choose a class...</option>${options}</select>
+      </div>
+      <p class="muted">Enter grades from 0 to 100. Passing is ${PASSING}. The average and remarks are computed automatically.</p>
+      <div id="gradeSheet"></div>
+    </div>`;
+};
+
+// Reads one grade box: null if empty, NaN if invalid, otherwise the number
+function gradeValue(input) {
+  const text = input.value.trim();
+  if (text === "") return null;
+  const number = Number(text);
+  return Number.isFinite(number) && number >= 0 && number <= 100 ? number : NaN;
+}
+
+// Updates the average and remarks of one row
+function updateRow(row) {
+  const boxes = [...row.querySelectorAll(".gin")];
+  const values = boxes.map(gradeValue);
+  boxes.forEach((box, i) => box.classList.toggle("bad", Number.isNaN(values[i])));
+
+  let average = "-";
+  let remarks = "-";
+  if (values.some(Number.isNaN)) {
+    remarks = "Invalid";
+  } else if (values.some((v) => v === null)) {
+    remarks = values.every((v) => v === null) ? "-" : "Incomplete";
+  } else {
+    const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+    average = mean.toFixed(2);
+    remarks = mean >= PASSING ? "Passed" : "Failed";
+  }
+  row.querySelector(".avg").textContent = average;
+  row.querySelector(".rem").textContent = remarks;
+}
+
+// Shows the grade sheet of the chosen class
+async function loadSheet(classId) {
+  const box = $("#gradeSheet");
+  const c = myClasses.find((x) => x.id === classId);
+  if (!c) { box.innerHTML = ""; return; }
+  box.innerHTML = '<p class="muted">Loading...</p>';
+
+  try {
+    const [gradeSnap, students] = await Promise.all([
+      getDocs(query(
+        collection(db, "grades"),
+        where("classId", "==", classId),
+        where("facultyId", "==", me.uid)
+      )),
+      Promise.all(c.studentIds.map(async (id) => {
+        const snap = await getDoc(doc(db, "students", id));
+        return { id, ...(snap.exists() ? snap.data() : { firstName: "(removed account)" }) };
+      }))
+    ]);
+
+    const saved = {};
+    gradeSnap.docs.forEach((d) => { saved[d.data().studentId] = d.data(); });
+    students.sort((a, b) => String(a.lastName || "").localeCompare(String(b.lastName || "")));
+
+    if (!students.length) {
+      box.innerHTML = '<p class="muted">No students are enrolled in this class yet.</p>';
+      return;
+    }
+
+    const input = (key, grade) =>
+      `<td><input class="gin" data-k="${key}" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="${esc(grade?.[key] ?? "")}"></td>`;
+
+    const rows = students.map((s) => {
+      const name = [s.lastName, s.firstName].filter(Boolean).join(", ");
+      const grade = saved[s.id];
+      return `<tr data-student="${esc(s.id)}">
+        <td>${esc(s.studentId)}</td>
+        <td>${esc(name)}</td>
+        ${input("prelim", grade)}${input("midterm", grade)}${input("final", grade)}
+        <td class="avg">-</td>
+        <td class="rem">-</td>
+      </tr>`;
+    }).join("");
+
+    box.dataset.classId = classId;
+    box.innerHTML = `
+      <div class="table-wrap"><table>
+        <thead><tr><th>ID</th><th>Name</th><th>Prelim</th><th>Midterm</th><th>Final</th><th>Average</th><th>Remarks</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <p><button type="button" class="btn" data-act="save-grades">Save grades</button></p>`;
+    box.querySelectorAll("tr[data-student]").forEach(updateRow);
+  } catch (error) {
+    box.innerHTML = '<p class="muted">Could not load the grade sheet. Try again.</p>';
+  }
+}
+
+// Saves the whole class in one go
+async function saveGrades(button) {
+  const box = $("#gradeSheet");
+  const classId = box.dataset.classId;
+  const c = myClasses.find((x) => x.id === classId);
+  if (!c) return;
+
+  const batch = writeBatch(db);
+  for (const row of box.querySelectorAll("tr[data-student]")) {
+    const [prelim, midterm, fin] = [...row.querySelectorAll(".gin")].map(gradeValue);
+    if ([prelim, midterm, fin].some(Number.isNaN)) {
+      return toast("Grades must be numbers from 0 to 100.", "error");
+    }
+    batch.set(doc(db, "grades", `${classId}_${row.dataset.student}`), {
+      classId,
+      studentId: row.dataset.student,
+      facultyId: me.uid,
+      prelim,
+      midterm,
+      final: fin,
+      updatedAt: serverTimestamp()
+    });
+  }
+
+  button.disabled = true;
+  try {
+    await batch.commit();
+    await setDoc(doc(collection(db, "auditLogs")), {
+      actorUid: me.uid,
+      actorName: me.name,
+      action: "saved grades",
+      target: `${c.code} ${c.section}`,
+      at: serverTimestamp()
+    }).catch(() => {});
+    toast("Grades saved");
+  } catch (error) {
+    toast("Could not save the grades. Try again.", "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// Events for the grade sheet
+$("#view").addEventListener("change", (event) => {
+  if (event.target.id === "gradeClass") loadSheet(event.target.value);
+});
+$("#view").addEventListener("input", (event) => {
+  if (event.target.classList.contains("gin")) updateRow(event.target.closest("tr"));
+});
+$("#view").addEventListener("click", (event) => {
+  const button = event.target.closest('[data-act="save-grades"]');
+  if (button) saveGrades(button);
+});
