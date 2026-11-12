@@ -593,8 +593,6 @@ TITLES.schedule = "Schedule";
 }
 
 
-/* ----- Grade rules: NO rounding. Decimals are cut off (86.66 -> 86) ----- */
-
 const SCALE = [
   [97, "1.00", "Excellent", "97 - 100"],
   [94, "1.25", "Superior", "94 - 96"],
