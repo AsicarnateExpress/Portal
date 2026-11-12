@@ -1692,3 +1692,82 @@ start = async function () {
   const sideButton = $('#nav [data-view="logout"]');
   if (sideButton) sideButton.remove();
 };
+/* ---------- Profile: Guardian + Enrollment status ---------- */
+/* PASTE THIS AT THE VERY BOTTOM OF js/student.js, AFTER THE OTHER BLOCKS */
+
+const profileBeforeGuardian = render.profile;
+
+render.profile = () => {
+  const html = profileBeforeGuardian();
+
+  // Edit form: add the Guardian box above the error line
+  if (editingProfile) {
+    const box = `<div><label for="pf_guardian">Guardian name</label>
+      <input id="pf_guardian" type="text" value="${esc(profile.guardianName || "")}"></div>`;
+    return html.replace('<p id="pfError"', () => box + '<p id="pfError"');
+  }
+
+  // View: Guardian and Enrollment rows after the emergency contact
+  const extra =
+    `<div class="row"><span>Guardian</span><b>${esc(profile.guardianName || "-")}</b></div>` +
+    '<div class="row"><span>Enrollment</span><b id="enrollVal">Checking...</b></div>';
+
+  setTimeout(async () => {
+    try {
+      const rows = await loadTermData();
+      const el = $("#enrollVal");
+      if (el) el.textContent = rows.length ? "Enrolled" : "Not enrolled yet";
+    } catch (error) {
+      const el = $("#enrollVal");
+      if (el) el.textContent = "-";
+    }
+  }, 0);
+
+  return html.replace(
+    /<span>Emergency contact number<\/span><b>[\s\S]*?<\/b><\/div>/,
+    (m) => m + extra
+  );
+};
+
+// Save: now includes the guardian name
+saveProfile = async function (event) {
+  event.preventDefault();
+  const value = (id) => $("#" + id).value.trim();
+  const updates = {
+    course: value("pf_course"),
+    yearLevel: value("pf_year"),
+    section: value("pf_section"),
+    username: value("pf_username"),
+    birthday: value("pf_birthday"),
+    gender: value("pf_gender"),
+    address: value("pf_address"),
+    contact: value("pf_contact"),
+    emergencyContact: value("pf_emergency"),
+    guardianName: value("pf_guardian")
+  };
+  const fail = (message) => { $("#pfError").textContent = message; };
+  fail("");
+
+  if (Object.values(updates).some((v) => !v)) return fail("Fill in all the fields.");
+  if (!/^[A-Za-z0-9_.]{3,20}$/.test(updates.username)) {
+    return fail("Username: 3-20 letters, numbers, dots, or underscores.");
+  }
+  if (new Date(updates.birthday) >= new Date()) return fail("Birthday must be in the past.");
+  if (!/^\d{11}$/.test(updates.contact)) return fail("Contact number must be exactly 11 digits.");
+  if (!/^\d{11}$/.test(updates.emergencyContact)) {
+    return fail("Emergency contact number must be exactly 11 digits.");
+  }
+
+  const button = event.target.querySelector("button[type=submit]");
+  button.disabled = true;
+  try {
+    await updateDoc(doc(db, "students", me.uid), updates);
+    Object.assign(profile, updates);
+    editingProfile = false;
+    toast("Profile updated");
+    show("profile");
+  } catch (error) {
+    fail("Could not save. Try again.");
+    button.disabled = false;
+  }
+};
