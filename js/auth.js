@@ -576,6 +576,70 @@ validate = function (data, fields) {
 document.getElementById("authForm").addEventListener("input", (event) => {
   if (event.target.id === "contact") {
     event.target.value = event.target.value.replace(/\D/g, "").slice(0, 11);
+    /* ---------- Professor's enhancements: address, contacts, password match ---------- */
+/* PASTE THIS AT THE VERY BOTTOM OF js/auth.js */
+
+// New student fields: address, student contact, emergency contact
+{
+  const list = FIELDS.student;
+  const at = list.findIndex((f) => f.id === "section") + 1;
+  list.splice(at, 0,
+    field("address", "Address", "text", { full: true }),
+    field("contact", "Contact number", "tel"),
+    field("emergencyContact", "Emergency contact number", "tel")
+  );
+}
+
+// Both number boxes: digits only, 11 digits
+const renderBeforeContacts = render;
+render = function () {
+  renderBeforeContacts();
+  if (mode !== "register") return;
+  ["contact", "emergencyContact"].forEach((id) => {
+    const box = document.getElementById(id);
+    if (!box) return;
+    box.setAttribute("inputmode", "numeric");
+    box.maxLength = 11;
+    box.placeholder = "09123456789";
+  });
+};
+
+// Emergency contact must be exactly 11 digits
+const validateBeforeContacts = validate;
+validate = function (data, fields) {
+  const errors = validateBeforeContacts(data, fields);
+  if (mode === "register" && data.emergencyContact && !/^\d{11}$/.test(data.emergencyContact)) {
+    errors.emergencyContact = "Emergency contact number must be exactly 11 digits.";
+  }
+  return errors;
+};
+
+// Live "password match" message under Confirm password
+function checkPasswordMatch() {
+  if (mode !== "register") return;
+  const password = document.getElementById("password");
+  const confirm = document.getElementById("confirm");
+  const wrap = document.querySelector('[data-field="confirm"]');
+  if (!password || !confirm || !wrap) return;
+
+  const message = wrap.querySelector(".err");
+  if (!confirm.value) {
+    wrap.classList.remove("bad");
+    message.textContent = "";
+    return;
+  }
+  const same = password.value === confirm.value;
+  wrap.classList.toggle("bad", !same);
+  message.textContent = same ? "Passwords match." : "Passwords do not match.";
+}
+
+document.getElementById("authForm").addEventListener("input", (event) => {
+  if (event.target.id === "emergencyContact") {
+    event.target.value = event.target.value.replace(/\D/g, "").slice(0, 11);
+  }
+  if (event.target.id === "password" || event.target.id === "confirm") checkPasswordMatch();
+});
+
   }
   if (event.target.id === "password") updateRules();
 });
