@@ -1018,3 +1018,215 @@ $("#view").addEventListener("input", (event) => {
 $("#view").addEventListener("submit", (event) => {
   if (event.target.id === "profForm") saveProfile(event);
 });
+/* ---------- New design (glass cards like ScholarPen, St. Gabriel green and gold) ---------- */
+/* PASTE THIS AT THE VERY BOTTOM OF js/student.js, AFTER 3_student_additions.js */
+
+document.head.append(Object.assign(document.createElement("style"), {
+  textContent: `
+  body.dash-body{background:linear-gradient(135deg,#04301c 0%,#06532f 50%,#0a6b3f 100%) fixed;color:#fff}
+  body.dash-body .sidebar{background:rgba(255,255,255,.08);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.18);border-radius:0 24px 24px 0;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  body.dash-body .sidebar nav button{background:transparent;border:1px solid transparent;border-radius:14px;color:#fff;text-align:left}
+  body.dash-body .sidebar nav button.on{background:rgba(215,181,64,.30);border-color:rgba(255,255,255,.35);color:#fff}
+  body.dash-body .topbar{background:rgba(255,255,255,.10);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.18);border-radius:22px;box-shadow:0 8px 24px rgba(0,0,0,.2);color:#fff;display:flex;align-items:center;gap:12px}
+  body.dash-body .topbar h2{margin:0;color:#fff}
+  .title-wrap{flex:1;min-width:0}
+  .title-wrap small{display:block;color:rgba(255,255,255,.75)}
+  .mini-avatar{width:26px;height:26px;margin-right:6px;border-radius:50%;object-fit:cover;vertical-align:middle;border:2px solid var(--gold)}
+  body.dash-body #profileMenu{background:#0b4a2c;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:16px}
+  body.dash-body .panel{background:rgba(255,255,255,.10);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.2);border-radius:24px;box-shadow:0 10px 30px rgba(0,0,0,.22);color:#fff;margin-bottom:16px}
+  body.dash-body .panel h3,body.dash-body .panel b,body.dash-body .profile-grid b,body.dash-body .pw-form label{color:#fff}
+  body.dash-body .muted,body.dash-body .profile-grid small{color:rgba(255,255,255,.72)}
+  body.dash-body .panel-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  body.dash-body .panel-head h3{margin:0}
+  body.dash-body .strip{margin-bottom:14px;padding:12px 16px;border-radius:16px;background:rgba(255,255,255,.10);color:#fff;line-height:1.5}
+  body.dash-body .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0}
+  body.dash-body select,body.dash-body .pw-form input,body.dash-body .toolbar input{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:14px;padding:9px 12px}
+  body.dash-body select option{color:#000}
+  body.dash-body .btn.ghost{background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.35)}
+  body.dash-body .table-wrap table{border-collapse:separate;border-spacing:0;width:100%}
+  body.dash-body th{background:rgba(255,255,255,.16);color:#fff;text-align:left}
+  body.dash-body th:first-child{border-radius:14px 0 0 14px}
+  body.dash-body th:last-child{border-radius:0 14px 14px 0}
+  body.dash-body td{color:#fff;border-bottom:1px solid rgba(255,255,255,.14)}
+  body.dash-body .pill.active{background:rgba(120,230,150,.25);color:#c6ffd9}
+  body.dash-body .pill.deactivated{background:rgba(255,120,120,.28);color:#ffd2d2}
+  body.dash-body .pill.pending{background:rgba(215,181,64,.30);color:#fff1b8}
+  .stats{display:flex;flex-wrap:wrap;gap:6px 24px;margin-top:14px}
+  .stats span{color:rgba(255,255,255,.75)}
+  .stats b{margin-left:4px;font-size:1.05rem}
+  `
+}));
+
+
+/* ----- Top bar: name under the title, avatar, visible Logout ----- */
+
+function decorateTopbar() {
+  const title = $("#viewTitle");
+  if (!title || $("#subTitle")) return;
+
+  const wrap = document.createElement("div");
+  wrap.className = "title-wrap";
+  title.before(wrap);
+  const sub = document.createElement("small");
+  sub.id = "subTitle";
+  sub.textContent = `${me.name} · ${profile.studentId || me.roleId}`;
+  wrap.append(title, sub);
+
+  const out = document.createElement("button");
+  out.type = "button";
+  out.id = "topLogout";
+  out.className = "btn sm ghost";
+  out.textContent = "Logout";
+  out.addEventListener("click", logout);
+  $(".topbar .profile").before(out);
+
+  if (String(profile.photo || "").startsWith("data:image/")) {
+    $("#profileBtn").insertAdjacentHTML("afterbegin",
+      `<img class="mini-avatar" src="${esc(profile.photo)}" alt="">`);
+  }
+}
+
+const startBeforeDesign = start;
+start = async function () {
+  await startBeforeDesign();
+  decorateTopbar();
+};
+
+
+/* ----- Shared: info strip under the title ----- */
+
+function infoStrip(rows) {
+  const year = (rows.find((r) => r.yearId === pick.year) || {}).yearName || "-";
+  const fullName = [profile.firstName, profile.middleName, profile.lastName]
+    .filter(Boolean).join(" ") || me.name;
+  return `<div class="strip"><b>${esc(fullName)} · ${esc(profile.studentId || me.roleId)}</b><br>
+    ${esc(profile.course || "-")} · ${esc(profile.yearLevel || "-")} · Section ${esc(profile.section || "-")} · ${esc(year)} · ${esc(pick.sem)}</div>`;
+}
+
+
+/* ----- Schedule (new look) ----- */
+
+render.schedule = () => {
+  setTimeout(loadSchedule2, 0);
+  return '<div id="schBox"><div class="panel"><p class="muted">Loading schedule...</p></div></div>';
+};
+
+async function loadSchedule2() {
+  const box = $("#schBox");
+  if (!box) return;
+  try {
+    const rows = await loadTermData();
+    redraw = () => {
+      const bar = controls(rows);
+      const strip = infoStrip(rows);
+      const list = rows.filter((r) => r.yearId === pick.year && r.sem === pick.sem);
+      const body = list.map((r) => {
+        const s = splitSchedule(r.schedule);
+        return `<tr><td>${esc(s.time)}</td><td>${esc(s.days)}</td><td>${esc(r.code)}</td>
+          <td>${esc(r.name)}</td><td>${esc(r.room)}</td><td>${esc(r.teacher)}</td></tr>`;
+      }).join("");
+      box.innerHTML = `
+        <div class="panel">
+          <div class="panel-head"><h3>My Class Schedule</h3>${bar}</div>
+          ${strip}
+          <div class="table-wrap"><table>
+            <thead><tr><th>Time</th><th>Days</th><th>Course code</th><th>Subject</th><th>Room</th><th>Teacher</th></tr></thead>
+            <tbody>${body || '<tr><td colspan="6" class="muted">No classes for this semester.</td></tr>'}</tbody>
+          </table></div>
+        </div>`;
+    };
+    redraw();
+  } catch (error) {
+    box.innerHTML = '<div class="panel"><p class="muted">Could not load your schedule. Try again.</p></div>';
+  }
+}
+
+
+/* ----- Grades (new look: My Grades card + Grade Notes card) ----- */
+
+render.grades = () => {
+  setTimeout(loadMyGrades2, 0);
+  return '<div id="gradeBox"><div class="panel"><p class="muted">Loading grades...</p></div></div>';
+};
+
+async function loadMyGrades2() {
+  const box = $("#gradeBox");
+  if (!box) return;
+  try {
+    const [rows, gradeSnap] = await Promise.all([
+      loadTermData(),
+      getDocs(query(collection(db, "grades"), where("studentId", "==", me.uid)))
+    ]);
+    const saved = {};
+    gradeSnap.docs.forEach((d) => { saved[d.data().classId] = d.data(); });
+
+    const scored = rows.map((r) => {
+      const g = saved[r.classId];
+      const parts = g ? [g.prelim, g.midterm, g.final] : [];
+      const done = parts.length === 3 && parts.every((v) => typeof v === "number");
+      return { ...r, raw: done ? parts.reduce((a, b) => a + b, 0) / 3 : null };
+    });
+
+    // GWA: weighted by units, decimals cut off (no rounding)
+    const gwa = (list) => {
+      const graded = list.filter((r) => r.raw !== null && r.units > 0);
+      const units = graded.reduce((s, r) => s + r.units, 0);
+      return units ? graded.reduce((s, r) => s + r.raw * r.units, 0) / units : null;
+    };
+    const gwaText = (v) => (v === null ? "-" : `${cut(v)} (${equivalentOf(v).eq})`);
+
+    const scaleRows = SCALE.map((s) =>
+      `<tr><td>${s[1]}</td><td>${s[3]}</td><td>${s[2]}</td></tr>`).join("") +
+      "<tr><td>5.00</td><td>Below 75</td><td>Failed</td></tr>";
+
+    redraw = () => {
+      const bar = controls(scored);
+      const strip = infoStrip(scored);
+      const inYear = scored.filter((r) => r.yearId === pick.year);
+      const inSem = inYear.filter((r) => r.sem === pick.sem);
+      const list = inSem.filter((r) => r.raw !== null);
+
+      const body = list.map((r) => {
+        const passed = cut(r.raw) >= PASSING;
+        return `<tr>
+          <td>${esc(r.code)}</td><td>${esc(r.name)}</td><td>${esc(r.teacher)}</td>
+          <td>${r.units}</td><td><b>${cut(r.raw)}</b></td><td>${equivalentOf(r.raw).eq}</td>
+          <td><span class="pill ${passed ? "active" : "deactivated"}">${passed ? "Passed" : "Failed"}</span></td>
+          <td>${passed ? r.units : "—"}</td>
+        </tr>`;
+      }).join("");
+
+      const totalUnits = inSem.reduce((s, r) => s + r.units, 0);
+      const earned = list.filter((r) => cut(r.raw) >= PASSING).reduce((s, r) => s + r.units, 0);
+
+      box.innerHTML = `
+        <div class="panel">
+          <div class="panel-head"><h3>My Grades</h3>${bar}</div>
+          ${strip}
+          <div class="table-wrap"><table>
+            <thead><tr><th>Course code</th><th>Subject</th><th>Professor</th><th>Units</th><th>Grade</th><th>Equivalent</th><th>Remarks</th><th>Units earned</th></tr></thead>
+            <tbody>${body || '<tr><td colspan="8" class="muted">No grades yet for this semester.</td></tr>'}</tbody>
+          </table></div>
+          <div class="stats">
+            <span>Subjects:<b>${inSem.length}</b></span>
+            <span>Total units:<b>${totalUnits}</b></span>
+            <span>Units earned:<b>${earned}</b></span>
+            <span>${esc(pick.sem)} GWA:<b>${gwaText(gwa(inSem))}</b></span>
+            <span>Overall GWA (academic year):<b>${gwaText(gwa(inYear))}</b></span>
+            <span>Passing grade:<b>${PASSING}</b></span>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Grade Notes</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Equivalent</th><th>Grade</th><th>Meaning</th></tr></thead>
+            <tbody>${scaleRows}</tbody>
+          </table></div>
+          <p class="muted">The passing grade is ${PASSING}. Remarks show only Passed or Failed. Decimals are not rounded (86.66 is 86).</p>
+        </div>`;
+    };
+    redraw();
+  } catch (error) {
+    box.innerHTML = '<div class="panel"><p class="muted">Could not load your grades. Try again.</p></div>';
+  }
+}
