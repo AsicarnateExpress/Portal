@@ -571,13 +571,15 @@ validate = function (data, fields) {
   }
   return errors;
 };
-
 // Live typing: digits only in the contact box, and the password checklist
 document.getElementById("authForm").addEventListener("input", (event) => {
   if (event.target.id === "contact") {
     event.target.value = event.target.value.replace(/\D/g, "").slice(0, 11);
-    /* ---------- Professor's enhancements: address, contacts, password match ---------- */
-/* PASTE THIS AT THE VERY BOTTOM OF js/auth.js */
+  }
+  if (event.target.id === "password") updateRules();
+});
+
+/* ---------- Professor's enhancements: address, contacts, password match ---------- */
 
 // New student fields: address, student contact, emergency contact
 {
@@ -640,6 +642,3 @@ document.getElementById("authForm").addEventListener("input", (event) => {
   if (event.target.id === "password" || event.target.id === "confirm") checkPasswordMatch();
 });
 
-  }
-  if (event.target.id === "password") updateRules();
-});
