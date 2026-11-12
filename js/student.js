@@ -1467,3 +1467,182 @@ $("#view").addEventListener("click", (event) => {
   if (button.dataset.act === "p-remove") removePhoto();
   if (button.dataset.act === "p-password") show("account");
 });
+/* ---------- Home dashboard: greeting, latest announcements, Today's Classes, Upcoming Classes ---------- */
+/* PASTE THIS AT THE VERY BOTTOM OF js/student.js, AFTER 5_student_profile_design.js */
+
+document.head.append(Object.assign(document.createElement("style"), {
+  textContent: `
+  .greet{margin:0 0 14px;padding:12px 16px;border-radius:16px;background:rgba(255,255,255,.10);color:#fff;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+  .class-row{display:grid;grid-template-columns:2fr 1.3fr 1.5fr;gap:10px;align-items:center;margin-bottom:8px;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.12);border:1.5px solid transparent;color:#fff}
+  .class-row.now{border-color:rgba(255,255,255,.75)}
+  .class-row .mid{text-align:center}
+  .class-row .end{text-align:right;color:rgba(255,255,255,.8)}
+  .now-badge{display:inline-block;margin-left:8px;padding:2px 10px;border-radius:999px;background:rgba(215,181,64,.4);font-size:.75rem}
+  @media (max-width:640px){.class-row{grid-template-columns:1fr}.class-row .mid,.class-row .end{text-align:left}}
+  `
+}));
+
+TITLES.home = "Dashboard";
+
+// Add the "Home" button at the top of the menu
+{
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.view = "home";
+  button.textContent = "Home";
+  $("#nav").prepend(button);
+}
+
+
+/* ----- Reading days and times from a schedule like "MWF 8:00-9:00 AM" ----- */
+
+const DAY_IDX = { M: 1, T: 2, W: 3, H: 4, F: 5, S: 6, U: 0 };
+const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function parseDays(text) {
+  const match = String(text || "").trim().match(/^([A-Za-z]+)\s/);
+  if (!match) return [];
+  const days = match[1].replace(/th/gi, "H").toUpperCase().split("")
+    .map((c) => DAY_IDX[c]).filter((d) => d !== undefined);
+  return [...new Set(days)];
+}
+
+// Returns start and end as minutes after midnight, or null
+function parseTimes(text) {
+  const m = String(text || "").match(
+    /(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+  if (!m) return null;
+  const toMinutes = (h, min, ap) => {
+    let hour = Number(h);
+    if (ap) {
+      hour %= 12;
+      if (ap.toUpperCase() === "PM") hour += 12;
+    }
+    return hour * 60 + Number(min || 0);
+  };
+  let start = toMinutes(m[1], m[2], m[3] || m[6]);
+  const end = toMinutes(m[4], m[5], m[6]);
+  if (start >= end && !m[3]) start -= 12 * 60;   // "11:00-1:00 PM"
+  return { start, end };
+}
+
+
+/* ----- Home page ----- */
+
+render.home = () => {
+  setTimeout(loadHome, 0);
+  return '<div id="homeBox"><div class="panel"><p class="muted">Loading...</p></div></div>';
+};
+
+async function loadHome() {
+  const box = $("#homeBox");
+  if (!box) return;
+  try {
+    const [rows, annSnap] = await Promise.all([
+      loadTermData(),
+      getDocs(query(collection(db, "announcements"), where("audience", "in", ["all", "students"])))
+    ]);
+
+    const latest = annSnap.docs.map((d) => d.data())
+      .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+      .slice(0, 2);
+
+    // Start on the semester that has classes
+    controls(rows);
+    const inYear = rows.filter((r) => r.yearId === pick.year);
+    if (!inYear.some((r) => r.sem === pick.sem)) {
+      const count = {};
+      inYear.forEach((r) => { count[r.sem] = (count[r.sem] || 0) + 1; });
+      const best = Object.entries(count).sort((a, b) => b[1] - a[1])[0];
+      if (best) pick.sem = best[0];
+    }
+
+    const classRow = (r, middle, isNow) => `
+      <div class="class-row ${isNow ? "now" : ""}">
+        <div><b>${esc(r.code)} · ${esc(r.name)}</b>${isNow ? '<span class="now-badge">now</span>' : ""}</div>
+        <div class="mid">${esc(middle)}</div>
+        <div class="end">${esc(r.teacher)} · ${esc(r.room)}</div>
+      </div>`;
+
+    redraw = () => {
+      const now = new Date();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const today = now.getDay();
+      const hour = now.getHours();
+      const hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+      const firstName = profile.firstName || me.name.split(" ")[0];
+
+      const list = rows
+        .filter((r) => r.yearId === pick.year && r.sem === pick.sem)
+        .map((r) => ({
+          ...r,
+          days: parseDays(r.schedule),
+          t: parseTimes(r.schedule),
+          time: splitSchedule(r.schedule).time
+        }));
+
+      const todays = list.filter((r) => r.days.includes(today))
+        .sort((a, b) => (a.t ? a.t.start : 0) - (b.t ? b.t.start : 0));
+
+      const upcoming = [];
+      for (let offset = 0; offset < 7; offset++) {
+        const day = (today + offset) % 7;
+        list.filter((r) => r.days.includes(day)).forEach((r) => {
+          if (offset === 0 && r.t && r.t.start <= nowMin) return;
+          upcoming.push({ r, offset, day, start: r.t ? r.t.start : 0 });
+        });
+      }
+      upcoming.sort((a, b) => a.offset - b.offset || a.start - b.start);
+
+      const todayHTML = todays.map((r) =>
+        classRow(r, r.time, r.t && nowMin >= r.t.start && nowMin < r.t.end)).join("");
+      const upcomingHTML = upcoming.slice(0, 6).map((u) => {
+        const label = u.offset === 0 ? "Today" : u.offset === 1 ? "Tomorrow" : DAY_SHORT[u.day];
+        return classRow(u.r, `${label} · ${u.r.time}`, false);
+      }).join("");
+
+      const news = latest.length ? `
+        <div class="panel">
+          <h3>Latest announcements</h3>
+          ${latest.map((a) => `<p style="margin:4px 0"><b>${esc(a.title)}</b> · ${esc(
+            a.createdAt?.toDate ? a.createdAt.toDate().toLocaleDateString("en-US",
+              { month: "short", day: "numeric", year: "numeric" }) : "-")}</p>`).join("")}
+          <p><button type="button" class="btn sm" data-go="announcements">See announcements</button></p>
+        </div>` : "";
+
+      box.innerHTML = `
+        ${news}
+        <div class="greet"><span>${hello}, ${esc(firstName)}! 👋</span>${controls(rows)}</div>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Today's Classes</h3>
+            <button type="button" class="btn sm ghost" data-go="schedule">Full schedule</button>
+          </div>
+          ${todayHTML || '<p class="muted">No classes today.</p>'}
+        </div>
+        <div class="panel">
+          <h3>Upcoming Classes</h3>
+          ${upcomingHTML || '<p class="muted">No upcoming classes.</p>'}
+        </div>`;
+    };
+    redraw();
+  } catch (error) {
+    box.innerHTML = '<div class="panel"><p class="muted">Could not load the dashboard. Try again.</p></div>';
+  }
+}
+
+// Keep the "now" badge current
+setInterval(() => { if ($("#homeBox") && $("#homeBox .greet")) redraw(); }, 60000);
+
+// "Full schedule" and "See announcements" buttons
+$("#view").addEventListener("click", (event) => {
+  const go = event.target.closest("[data-go]");
+  if (go) show(go.dataset.go);
+});
+
+// Open on Home after logging in
+const startBeforeHome = start;
+start = async function () {
+  await startBeforeHome();
+  show("home");
+};
