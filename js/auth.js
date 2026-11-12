@@ -641,4 +641,13 @@ document.getElementById("authForm").addEventListener("input", (event) => {
   }
   if (event.target.id === "password" || event.target.id === "confirm") checkPasswordMatch();
 });
+/* ---------- Guardian name on Create Account (students) ---------- */
+/* PASTE THIS AT THE VERY BOTTOM OF js/auth.js, AFTER THE EARLIER BLOCKS */
+
+{
+  const list = FIELDS.student;
+  let at = list.findIndex((f) => f.id === "emergencyContact");
+  at = at >= 0 ? at + 1 : list.findIndex((f) => f.id === "password");
+  list.splice(at, 0, field("guardianName", "Guardian name"));
+}
 
