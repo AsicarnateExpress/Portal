@@ -495,3 +495,27 @@ MODELS.subjects = {
       ? "That subject code already exists in this course." : "",
   refs: [["classes", "subjectId"]]
 };
+/* ---------- Professor's enhancements: teacher name on classes ---------- */
+/* PASTE THIS AT THE VERY BOTTOM OF js/academics.js */
+
+// Students cannot read faculty accounts, so the teacher's name is saved on the class itself
+const classCheckBefore = MODELS.classes.check;
+MODELS.classes.check = (rec, id) => {
+  const problem = classCheckBefore(rec, id);
+  if (!problem) rec.facultyName = find("faculty", rec.facultyId)?.name || "";
+  return problem;
+};
+
+// Old classes get the teacher name automatically the next time this page loads
+const loadAllBefore = loadAll;
+loadAll = async function () {
+  await loadAllBefore();
+  await Promise.all(data.classes
+    .filter((c) => !c.facultyName)
+    .map((c) => {
+      const teacher = find("faculty", c.facultyId);
+      if (!teacher) return null;
+      c.facultyName = teacher.name;
+      return updateDoc(doc(db, "classes", c.id), { facultyName: teacher.name }).catch(() => {});
+    }));
+};
