@@ -1646,3 +1646,49 @@ start = async function () {
   await startBeforeHome();
   show("home");
 };
+/* ---------- One Logout only (in the profile popup) with "Are you sure?" ---------- */
+/* PASTE THIS AT THE VERY BOTTOM OF js/student.js, AFTER THE OTHER BLOCKS */
+
+document.head.append(Object.assign(document.createElement("style"), {
+  textContent: `
+  #logoutBox{background:#0b4a2c;color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:22px 24px;max-width:340px;text-align:center}
+  #logoutBox::backdrop{background:rgba(0,0,0,.55)}
+  #logoutBox p{margin:0 0 16px;font-size:1.05rem}
+  #logoutBox .logout-actions{display:flex;gap:10px;justify-content:center}
+  `
+}));
+
+// The confirmation box
+const logoutBox = document.createElement("dialog");
+logoutBox.id = "logoutBox";
+logoutBox.innerHTML = `
+  <p>Are you sure you want to log out?</p>
+  <div class="logout-actions">
+    <button type="button" id="logoutNo" class="btn ghost sm">No</button>
+    <button type="button" id="logoutYes" class="btn sm">Yes</button>
+  </div>`;
+document.body.append(logoutBox);
+
+$("#logoutNo").addEventListener("click", () => logoutBox.close());
+$("#logoutYes").addEventListener("click", () => {
+  logoutBox.close();
+  logout();
+});
+
+// Logout in the popup now asks first (this runs before the old direct logout)
+$("#profileMenu").addEventListener("click", (event) => {
+  if (!event.target.closest('[data-menu="logout"]')) return;
+  event.stopPropagation();
+  $("#profileMenu").hidden = true;
+  logoutBox.showModal();
+}, true);
+
+// Remove the extra Logout buttons (top bar and side menu)
+const startBeforeLogoutFix = start;
+start = async function () {
+  await startBeforeLogoutFix();
+  const topButton = $("#topLogout");
+  if (topButton) topButton.remove();
+  const sideButton = $('#nav [data-view="logout"]');
+  if (sideButton) sideButton.remove();
+};
