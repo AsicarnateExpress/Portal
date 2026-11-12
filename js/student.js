@@ -1230,3 +1230,240 @@ async function loadMyGrades2() {
     box.innerHTML = '<div class="panel"><p class="muted">Could not load your grades. Try again.</p></div>';
   }
 }
+/* ---------- Profile page + avatar popup + Logout in the menu (ScholarPen style) ---------- */
+/* PASTE THIS AT THE VERY BOTTOM OF js/student.js, AFTER 4_student_design.js */
+/* Only fields from your own Create Account form are shown (no College, Nationality, Guardian). */
+
+document.head.append(Object.assign(document.createElement("style"), {
+  textContent: `
+  .pf-top{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}
+  .pf-top h3{margin:0}
+  .pf-head{display:flex;align-items:center;gap:16px;margin:18px 0 8px}
+  .pf-head h2{margin:0;color:#fff}
+  .pf-head p{margin:4px 0 0;color:rgba(255,255,255,.8)}
+  .pf-avatar,.menu-avatar{display:flex;align-items:center;justify-content:center;width:84px;height:84px;border-radius:50%;object-fit:cover;border:3px solid var(--gold);background:rgba(255,255,255,.18);color:#fff;font-size:2rem;font-weight:700;flex:none}
+  .pf-rows .row{display:grid;grid-template-columns:minmax(120px,200px) 1fr;gap:12px;padding:13px 4px;border-bottom:1px solid rgba(255,255,255,.18)}
+  .pf-rows .row span{color:rgba(255,255,255,.75)}
+  .pf-rows .row b{color:#fff;font-weight:600;word-break:break-word}
+  body.dash-body #profileMenu{width:min(330px,92vw);max-height:82vh;overflow:auto;padding:18px;text-align:center;border-radius:22px;box-shadow:0 16px 40px rgba(0,0,0,.4)}
+  #profileMenu .menu-avatar{width:96px;height:96px;margin:6px auto 10px}
+  #profileMenu h4{margin:0;color:#fff;font-size:1.15rem}
+  #profileMenu .menu-id{margin:2px 0 12px;color:rgba(255,255,255,.75)}
+  #profileMenu .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:10px 0}
+  #profileMenu .menu-rows{text-align:left;border-top:1px solid rgba(255,255,255,.2);margin-top:10px}
+  #profileMenu .menu-rows div{display:flex;justify-content:space-between;gap:12px;padding:9px 2px;border-bottom:1px solid rgba(255,255,255,.14)}
+  #profileMenu .menu-rows span{color:rgba(255,255,255,.75)}
+  #profileMenu .menu-rows b{color:#fff;text-align:right;word-break:break-word}
+  #profileMenu .menu-x{position:absolute;top:10px;right:14px;background:none;border:0;color:#fff;font-size:1.4rem;cursor:pointer}
+  .btn.logout-solid{background:#e0675a;color:#fff;border:0}
+  `
+}));
+
+// Logout button at the bottom of the side menu
+TITLES.logout = "Logout";
+render.logout = () => { logout(); return ""; };
+{
+  const out = document.createElement("button");
+  out.type = "button";
+  out.dataset.view = "logout";
+  out.textContent = "Logout";
+  $("#nav").append(out);
+}
+
+// Hidden file box used by "Change photo"
+const photoPick = document.createElement("input");
+photoPick.type = "file";
+photoPick.accept = "image/*";
+photoPick.hidden = true;
+photoPick.id = "photoPick";
+document.body.append(photoPick);
+
+
+/* ----- Helpers ----- */
+
+const hasPhoto = () => String(profile.photo || "").startsWith("data:image/");
+const nameOf = () => [profile.firstName, profile.middleName, profile.lastName]
+  .filter(Boolean).join(" ") || me.name;
+
+function avatarHTML(cls) {
+  return hasPhoto()
+    ? `<img class="${cls}" src="${esc(profile.photo)}" alt="Profile picture">`
+    : `<div class="${cls}">${esc((nameOf()[0] || "?").toUpperCase())}</div>`;
+}
+
+// "2005-11-26" -> "Nov 26, 2005 (20 years old)"
+function birthdayText(value) {
+  const m = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "-";
+  const born = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const now = new Date();
+  let age = now.getFullYear() - born.getFullYear();
+  if (now < new Date(now.getFullYear(), born.getMonth(), born.getDate())) age--;
+  const text = born.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return `${text} (${age} years old)`;
+}
+
+const rowHTML = (label, value) =>
+  `<div class="row"><span>${label}</span><b>${esc(value || "-")}</b></div>`;
+
+// Shrinks a photo to 256px so it fits in the database
+function squeezeImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const image = new Image();
+    reader.onload = () => { image.src = reader.result; };
+    image.onload = () => {
+      const scale = Math.min(256 / image.width, 256 / image.height, 1);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+      canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.8));
+    };
+    const fail = () => reject(new Error("Could not read that image."));
+    image.onerror = fail;
+    reader.onerror = fail;
+    reader.readAsDataURL(file);
+  });
+}
+
+
+/* ----- Profile page ----- */
+
+const profileFormBefore = render.profile;   // the edit form from the earlier block
+
+render.profile = () => {
+  if (editingProfile) return profileFormBefore();
+  const line = [profile.course, profile.yearLevel, profile.section ? "Section " + profile.section : ""]
+    .filter(Boolean).join(" · ");
+
+  return `
+    <div class="panel">
+      <div class="pf-top">
+        <h3>My Profile</h3>
+        <div class="actions">
+          <button type="button" class="btn sm" data-act="p-photo">Change photo</button>
+          <button type="button" class="btn sm ghost" data-act="p-remove">Remove photo</button>
+          <button type="button" class="btn sm" data-act="p-edit">Edit profile</button>
+          <button type="button" class="btn sm ghost" data-act="p-password">Change Password</button>
+        </div>
+      </div>
+      <div class="pf-head">
+        ${avatarHTML("pf-avatar")}
+        <div><h2>${esc(nameOf())}</h2><p>${esc(line || "-")}</p></div>
+      </div>
+      <div class="pf-rows">
+        ${rowHTML("Student ID", profile.studentId || me.roleId)}
+        ${rowHTML("Course", profile.course)}
+        ${rowHTML("Year · Section", [profile.yearLevel, profile.section].filter(Boolean).join(" · "))}
+        ${rowHTML("Birthdate", birthdayText(profile.birthday))}
+        ${rowHTML("Gender", profile.gender)}
+        ${rowHTML("Address", profile.address)}
+        ${rowHTML("Email", me.email)}
+        ${rowHTML("Username", profile.username)}
+        ${rowHTML("Contact number", profile.contact)}
+        ${rowHTML("Emergency contact number", profile.emergencyContact)}
+      </div>
+    </div>`;
+};
+
+
+/* ----- Avatar popup (top right) ----- */
+
+function refreshAvatars() {
+  document.querySelectorAll("#profileBtn .mini-avatar").forEach((el) => el.remove());
+  if (hasPhoto()) {
+    $("#profileBtn").insertAdjacentHTML("afterbegin",
+      `<img class="mini-avatar" src="${esc(profile.photo)}" alt="">`);
+  }
+}
+
+function refreshMenu() {
+  const menu = $("#profileMenu");
+  const popRow = (label, value) => `<div><span>${label}</span><b>${esc(value || "-")}</b></div>`;
+  menu.innerHTML = `
+    <button type="button" class="menu-x" data-menu="close" aria-label="Close">&times;</button>
+    ${avatarHTML("menu-avatar")}
+    <h4>${esc(nameOf())}</h4>
+    <p class="menu-id">${esc(profile.studentId || me.roleId)}</p>
+    <div class="actions">
+      <button type="button" class="btn sm" data-menu="photo">Change photo</button>
+      <button type="button" class="btn sm ghost" data-menu="remove">Remove photo</button>
+    </div>
+    <div class="menu-rows">
+      ${popRow("Course", profile.course)}
+      ${popRow("Year Level", profile.yearLevel)}
+      ${popRow("Section", profile.section)}
+      ${popRow("Email", me.email)}
+      ${popRow("Contact", profile.contact)}
+    </div>
+    <div class="actions">
+      <button type="button" class="btn sm" data-menu="profile">My Profile</button>
+      <button type="button" class="btn sm ghost" data-menu="password">Change Password</button>
+    </div>
+    <button type="button" class="btn sm logout-solid" data-menu="logout">Logout</button>`;
+}
+
+const startBeforeProfile = start;
+start = async function () {
+  await startBeforeProfile();
+  refreshMenu();
+  refreshAvatars();
+};
+
+function updatePhoto(value) {
+  return updateDoc(doc(db, "students", me.uid), { photo: value }).then(() => {
+    profile.photo = value;
+    refreshMenu();
+    refreshAvatars();
+    $("#profileMenu").hidden = true;
+    show("profile");
+  });
+}
+
+async function removePhoto() {
+  if (!hasPhoto()) return toast("You have no photo to remove.", "error");
+  try {
+    await updatePhoto("");
+    toast("Photo removed");
+  } catch (error) {
+    toast("Could not remove the photo. Try again.", "error");
+  }
+}
+
+photoPick.addEventListener("change", async () => {
+  const file = photoPick.files[0];
+  photoPick.value = "";
+  if (!file) return;
+  try {
+    await updatePhoto(await squeezeImage(file));
+    toast("Photo updated");
+  } catch (error) {
+    toast("Could not save the photo. Try again.", "error");
+  }
+});
+
+
+/* ----- Events ----- */
+
+$("#profileMenu").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-menu]");
+  if (!button) return;
+  const act = button.dataset.menu;
+  const menu = $("#profileMenu");
+
+  if (act === "close") menu.hidden = true;
+  if (act === "photo") photoPick.click();
+  if (act === "remove") removePhoto();
+  if (act === "profile") { menu.hidden = true; editingProfile = false; show("profile"); }
+  if (act === "password") { menu.hidden = true; show("account"); }
+  if (act === "logout") logout();
+});
+
+$("#view").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-act]");
+  if (!button) return;
+  if (button.dataset.act === "p-photo") photoPick.click();
+  if (button.dataset.act === "p-remove") removePhoto();
+  if (button.dataset.act === "p-password") show("account");
+});
